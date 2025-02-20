@@ -10,28 +10,25 @@ import game.board.compact.BoardCompact;
 import game.board.compact.CTile;
 import game.board.oop.Board;
 
-/**
- * The simplest Tree-DFS agent.
- * @author Jimmy
- */
+
 public class MyAgent extends ArtificialAgent {
 	protected BoardCompact board;
 	protected int searchedNodes;
 	protected List<EDirection> result;
 
 	private HashSet<Pair> targets;
-	private HashSet<Pair> boxes;
+
 	
 	@Override
 	protected List<EDirection> think(BoardCompact board) {
 		this.board = board;
 		searchedNodes = 0;
-		findBoxes();
+		this.result = new ArrayList<>();
+		this.targets = new HashSet<>();
 
 		long searchStartMillis = System.currentTimeMillis();
-		
-		this.result = new ArrayList<EDirection>();
-		search(); // the number marks how deep we will search (the longest plan we will consider)
+
+		search();
 
 		long searchTime = System.currentTimeMillis() - searchStartMillis;
         
@@ -44,10 +41,16 @@ public class MyAgent extends ArtificialAgent {
 		return result.isEmpty() ? null : result;
 	}
 
-	private boolean search() {
+	/**
+	 * Classical A* algorithm
+	 */
+	private void search() {
 		PriorityQueue<Node> queue = new PriorityQueue<>();
 
-		Node init = new Node(board, null, estimate(board), 0.0, null);
+		HashSet<Pair> boxes = new HashSet<>();
+		findBoxes(boxes);
+
+		Node init = new Node(board, null, estimate(boxes), 0.0, null, boxes);
 		queue.add(init);
 
 		Set<BoardCompact> visited = new HashSet<>();
@@ -58,7 +61,7 @@ public class MyAgent extends ArtificialAgent {
 
 			if(currentState.boardState.isVictory()) {
 				construct(currentState);
-				return true;
+				return;
 			}
 
             List<CAction> allActions = new ArrayList<>(CMove.getActions());
@@ -69,15 +72,23 @@ public class MyAgent extends ArtificialAgent {
 				BoardCompact newState = currentState.boardState.clone();
 				action.perform(newState);
 
-
-
 				if(!visited.contains(newState)) {
-					queue.add(new Node(newState, action, estimate(newState),
-							currentState.distance + 1, currentState));
+					HashSet<Pair> newBoxes = cloneSet(currentState.boxes);
+					if(action.getClass() == CPush.class) {
+						EDirection dir = action.getDirection();
+						newBoxes.remove(new Pair(currentState.boardState.playerX + dir.dX, currentState.boardState.playerY + dir.dY));
+						newBoxes.add(new Pair(newState.playerX + dir.dX, newState.playerY + dir.dY));
+					}
+					queue.add(new Node(newState, action, estimate(newBoxes),currentState.distance + 1, currentState, newBoxes));
 				}
 			}
 		}
-		return false;
+	}
+
+	private HashSet<Pair> cloneSet(HashSet<Pair> set) {
+		HashSet<Pair> clone = new HashSet<>();
+		for(Pair p : set) clone.add(new Pair(p.x, p.y));
+		return clone;
 	}
 
 	private void construct(Node currentState) {
@@ -88,10 +99,10 @@ public class MyAgent extends ArtificialAgent {
 		}
 	}
 
-	private void findBoxes() {
+	private void findBoxes(Set<Pair> boxes) {
 		for (int x = 0; x < board.width(); x++) {
 			for (int y = 0; y < board.height(); y++) {
-				if(CTile.forBox(1, board.tiles[x][y])) targets.add(new Pair(x, y));
+				if(CTile.forBox(1, board.tiles[x][y])) this.targets.add(new Pair(x, y));
 				if(CTile.isSomeBox(board.tiles[x][y])) boxes.add(new Pair(x, y));
 			}
 		}
@@ -101,42 +112,28 @@ public class MyAgent extends ArtificialAgent {
 	 * Currently loop over entire board
 	 * @param board loop over entire thing
 	 */
-	private int estimate(BoardCompact board) {
-		List<List<Integer>> boxes = new ArrayList<>();
-		List<List<Integer>> targets = new ArrayList<>();
+	private int estimate(HashSet<Pair> boxes) {
+		int min = Integer.MAX_VALUE;
 
-		for (int x = 0; x < board.width(); x++) {
-			for (int y = 0; y < board.height(); y++) {
-				if(CTile.forBox(1, board.tiles[x][y])) targets.add(Arrays.asList(x, y));
-				if(CTile.isSomeBox(board.tiles[x][y])) boxes.add(Arrays.asList(x, y));
+        List<Pair> tar = new ArrayList<>(targets);
+		List<Pair> box = new ArrayList<>(boxes);
+
+		for (int start = 0; start < tar.size(); start++) {
+			int count = 0;
+			for (int ind = 0; ind < box.size(); ind++) {
+				count += tar.get(ind).distanceTo(box.get((ind + start) % box.size()));
 			}
+			min = Math.min(min, count);
 		}
 
-		int count = 0;
-//		for(int i = 0; i < boxes.size(); i++) {
-//			count += distance(boxes.get(i), targets.get(i));
-//		}
-		for (int i = 0; i < boxes.size(); i++) {
-			int tempCount = 0;
-			for(int j = 0; j < boxes.size(); j++) {
-				tempCount += distance(boxes.get(j), targets.get(j+i % boxes.size()));
-			}
-
-			count = Math.min(count, tempCount);
-		}
-
-		return count;
-	}
-
-	private int distance(List<Integer> box, List<Integer> target) {
-		return Math.abs(box.get(0) - target.get(0)) + Math.abs(box.get(1) - target.get(1));
+		return min;
 	}
 }
 
 class Pair {
-	Integer x, y;
+	int x, y;
 
-	Pair(Integer x, Integer y) {
+	Pair(int x, int y) {
 		this.x = x;
 		this.y = y;
 	}
@@ -145,28 +142,36 @@ class Pair {
 	public boolean equals(Object o) {
 		if (o == null || getClass() != o.getClass()) return false;
 		Pair pair = (Pair) o;
-		return Objects.equals(x, pair.x) && Objects.equals(y, pair.y);
+		return x == pair.x && y == pair.y;
 	}
 
 	@Override
 	public int hashCode() {
 		return Objects.hash(x, y);
 	}
+
+	public int distanceTo(Pair p) {
+		return Math.abs(x - p.x) + Math.abs(y - p.y);
+	}
 }
 
 class Node implements Comparable<Node> {
 	BoardCompact boardState;
+	HashSet<Pair> boxes;
+
 	CAction action;
 	double estimate;
 	double distance;
 	Node parent;
 
-	public Node(BoardCompact board, CAction action, double estimate, double distance, Node parent) {
+
+	public Node(BoardCompact board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes) {
 		this.boardState = board.clone();
 		this.action = action;
 		this.estimate = estimate;
 		this.distance = distance;
 		this.parent = parent;
+		this.boxes = boxes;
 	}
 
 	@Override
