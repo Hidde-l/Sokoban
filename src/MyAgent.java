@@ -15,9 +15,9 @@ public class MyAgent extends ArtificialAgent {
 	protected BoardCompact board;
 	protected int searchedNodes;
 	protected List<EDirection> result;
-
+	
 	private HashSet<Pair> targets;
-
+	private boolean[][] deadSquares;
 	
 	@Override
 	protected List<EDirection> think(BoardCompact board) {
@@ -25,6 +25,7 @@ public class MyAgent extends ArtificialAgent {
 		searchedNodes = 0;
 		this.result = new ArrayList<>();
 		this.targets = new HashSet<>();
+		this.deadSquares = DeadSquareDetector.detect(board);
 
 		long searchStartMillis = System.currentTimeMillis();
 
@@ -76,6 +77,9 @@ public class MyAgent extends ArtificialAgent {
 					HashSet<Pair> newBoxes = cloneSet(currentState.boxes);
 					if(action.getClass() == CPush.class) {
 						EDirection dir = action.getDirection();
+
+						if(deadSquares[currentState.boardState.playerX + 2*dir.dX][currentState.boardState.playerY + 2*dir.dY]) continue;
+
 						newBoxes.remove(new Pair(currentState.boardState.playerX + dir.dX, currentState.boardState.playerY + dir.dY));
 						newBoxes.add(new Pair(newState.playerX + dir.dX, newState.playerY + dir.dY));
 					}
@@ -107,6 +111,8 @@ public class MyAgent extends ArtificialAgent {
 			}
 		}
 	}
+
+
 
 	/**
 	 * Currently loop over entire board
@@ -152,6 +158,92 @@ class Pair {
 
 	public int distanceTo(Pair p) {
 		return Math.abs(x - p.x) + Math.abs(y - p.y);
+	}
+}
+
+class DeadSquareDetector {
+
+	/**
+	 * Finds all the dead squares on the board
+	 *
+	 * @param board The board that we play on
+	 * @return a boolean[][] where true entries are dead tiles, and false entries are live tiles
+	 */
+	public static boolean[][] detect(BoardCompact board) {
+		boolean[][] tiles = new boolean[board.width()][board.height()];
+		for (int i = 0; i < board.width(); i++) {
+			Arrays.fill(tiles[i], true);
+		}
+
+		// This is to retrieve the target for when we are using the DeadSquareTest. In our final own
+		// implementation this part will not be necessary
+		List<Pair> targets = new ArrayList<>();
+		for (int x = 0; x < board.width(); x++) {
+			for (int y = 0; y < board.height(); y++) {
+				if(CTile.forBox(1, board.tiles[x][y])) {
+					targets.add(new Pair(x,y));
+				}
+			}
+		}
+
+		for (Pair coord : targets) {
+		// End of code required for DeadSquareTest
+
+//		for (Pair coord : MyAgent.targets) {
+			tiles[coord.x][coord.y] = false; //false is alive, true is dead
+			Queue<Pair> q = new LinkedList<>();
+			addNeighbours(coord, q, board);
+
+			while (!q.isEmpty()) {
+				Pair cur = q.poll();
+				if (!tiles[cur.x][cur.y]) continue; //if alive, continue.
+
+				if (CTile.isWall(board.tile(cur.x, cur.y))) continue; //Tile is not walkable, hence dead
+
+				if (canMoveToLivingSpot(cur, board, tiles)) { //If the tile can reach a living spot, set to alive and add neighbours
+					tiles[cur.x][cur.y] = false;
+					addNeighbours(cur, q, board);
+				}
+			}
+		}
+		return tiles;
+	}
+
+	/**
+	 * Tries to add the neighbours of a tile to the queue. Does so if said neighbours are not out of bound
+	 *
+	 * @param cur The current Pair whose neighbours we are adding
+	 * @param q The queue we are adding to
+	 * @param board The board we are playing on
+	 */
+	public static void addNeighbours(Pair cur, Queue<Pair> q, BoardCompact board) {
+		if (cur.x+1 < board.width()) q.add(new Pair(cur.x+1, cur.y));
+		if (cur.x-1 >= 0) q.add(new Pair(cur.x-1, cur.y));
+		if (cur.y+1 < board.height()) q.add(new Pair(cur.x, cur.y+1));
+		if (cur.y-1 >= 0) q.add(new Pair(cur.x, cur.y-1));
+	}
+
+	/**
+	 * Method checks whether a box on a given square could be moved to a neighbouring live spot
+	 *
+	 * @param coord	The coordinate where the box would be
+	 * @param board The board we use
+	 * @param tiles The list of alive and dead tiles
+	 * @return boolean whether a box could be moved to a living space
+	 */
+	public static boolean canMoveToLivingSpot(Pair coord, BoardCompact board, boolean[][] tiles) {
+		//check above and below
+		if (coord.y != 0 && coord.y != board.height()-1) {
+			if (!tiles[coord.x][coord.y-1] && CTile.isWalkable(board.tile(coord.x, coord.y+1))
+					|| (!tiles[coord.x][coord.y+1] && CTile.isWalkable(board.tile(coord.x, coord.y-1))))
+				return true;
+		}
+		//check left and right
+		if (coord.x != 0 && coord.x != board.width()-1)
+            if (!tiles[coord.x-1][coord.y] && CTile.isWalkable(board.tile(coord.x+1, coord.y))
+                    || (!tiles[coord.x+1][coord.y] && CTile.isWalkable(board.tile(coord.x-1, coord.y))))
+                return true;
+		return false;
 	}
 }
 
