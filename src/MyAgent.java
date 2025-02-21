@@ -1,6 +1,5 @@
 import static java.lang.System.out;
 
-import java.sql.Array;
 import java.util.*;
 
 import agents.ArtificialAgent;
@@ -8,7 +7,6 @@ import game.actions.EDirection;
 import game.actions.compact.*;
 import game.board.compact.BoardCompact;
 import game.board.compact.CTile;
-import game.board.oop.Board;
 
 
 public class MyAgent extends ArtificialAgent {
@@ -21,16 +19,18 @@ public class MyAgent extends ArtificialAgent {
 	
 	@Override
 	protected List<EDirection> think(BoardCompact board) {
+		// initialize everything
 		this.board = board;
 		searchedNodes = 0;
 		this.result = new ArrayList<>();
 		this.targets = new HashSet<>();
+		HashSet<Pair> boxes = new HashSet<>();
+		findBoxes(boxes);
 		this.deadSquares = DeadSquareDetector.detect(board);
 
+		// actually search
 		long searchStartMillis = System.currentTimeMillis();
-
-		search();
-
+		search(boxes);
 		long searchTime = System.currentTimeMillis() - searchStartMillis;
         
         if (verbose) {
@@ -38,28 +38,27 @@ public class MyAgent extends ArtificialAgent {
             out.printf("Performance: %.1f nodes/sec\n",
                         ((double)searchedNodes / (double)searchTime * 1000));
         }
-		
+
 		return result.isEmpty() ? null : result;
 	}
 
 	/**
-	 * Classical A* algorithm
+	 * Standard A* algorithm.
+	 *
+	 * @param boxes the initial placement of boxes on the board
 	 */
-	private void search() {
+	private void search(HashSet<Pair> boxes) {
 		PriorityQueue<Node> queue = new PriorityQueue<>();
-
-		HashSet<Pair> boxes = new HashSet<>();
-		findBoxes(boxes);
+		Set<BoardCompact> visited = new HashSet<>();
 
 		Node init = new Node(board, null, estimate(boxes), 0.0, null, boxes);
 		queue.add(init);
-
-		Set<BoardCompact> visited = new HashSet<>();
 
 		while (!queue.isEmpty()) {
 			Node currentState = queue.poll();
 			visited.add(currentState.boardState);
 
+			// if we found a solution, construct the list of actions taken and return
 			if(currentState.boardState.isVictory()) {
 				construct(currentState);
 				return;
@@ -68,19 +67,24 @@ public class MyAgent extends ArtificialAgent {
             List<CAction> allActions = new ArrayList<>(CMove.getActions());
 			allActions.addAll(CPush.getActions());
 
+			// loop over all the possible actions
 			for(CAction action : allActions){
+				// if the action is possible then apply it to a cloned board
 				if(!action.isPossible(currentState.boardState)) continue;
 				BoardCompact newState = currentState.boardState.clone();
 				action.perform(newState);
 
+				// if we haven't been at this board state before, explore it further
 				if(!visited.contains(newState)) {
 					HashSet<Pair> newBoxes = cloneSet(currentState.boxes);
 					if(action.getClass() == CPush.class) {
 						EDirection dir = action.getDirection();
 
-						if(deadSquares[currentState.boardState.playerX + 2*dir.dX][currentState.boardState.playerY + 2*dir.dY]) continue;
+						// if the place you push to is a dead square, don't search this further
+						if(deadSquares[newState.playerX + dir.dX][newState.playerY + dir.dY]) continue;
 
-						newBoxes.remove(new Pair(currentState.boardState.playerX + dir.dX, currentState.boardState.playerY + dir.dY));
+						// update the location of the box
+						newBoxes.remove(new Pair(newState.playerX, newState.playerY));
 						newBoxes.add(new Pair(newState.playerX + dir.dX, newState.playerY + dir.dY));
 					}
 					queue.add(new Node(newState, action, estimate(newBoxes),currentState.distance + 1, currentState, newBoxes));
@@ -89,12 +93,23 @@ public class MyAgent extends ArtificialAgent {
 		}
 	}
 
+	/**
+	 * Clone the set passed in.
+	 *
+	 * @param set the set to be cloned
+	 * @return a new set with all the same, cloned elements
+	 */
 	private HashSet<Pair> cloneSet(HashSet<Pair> set) {
 		HashSet<Pair> clone = new HashSet<>();
 		for(Pair p : set) clone.add(new Pair(p.x, p.y));
 		return clone;
 	}
 
+	/**
+	 * Construct the final solution.
+	 *
+	 * @param currentState the final state the A* search found
+	 */
 	private void construct(Node currentState) {
 		Node current = currentState;
 		while (current.parent != null) {
@@ -103,6 +118,11 @@ public class MyAgent extends ArtificialAgent {
 		}
 	}
 
+	/**
+	 * Find all the boxes and targets of these boxes on a board.
+	 *
+	 * @param boxes the set to which found boxes should be added
+	 */
 	private void findBoxes(Set<Pair> boxes) {
 		for (int x = 0; x < board.width(); x++) {
 			for (int y = 0; y < board.height(); y++) {
@@ -112,11 +132,11 @@ public class MyAgent extends ArtificialAgent {
 		}
 	}
 
-
-
 	/**
-	 * Currently loop over entire board
-	 * @param board loop over entire thing
+	 * Heuristic function to estimate cost.
+	 * Calculates hamming distance of minimum pairing of boxes and targets on the board.
+	 *
+	 * @param boxes the hashset of box locations
 	 */
 	private int estimate(HashSet<Pair> boxes) {
 		int min = Integer.MAX_VALUE;
@@ -170,32 +190,32 @@ class DeadSquareDetector {
 	 * @return a boolean[][] where true entries are dead tiles, and false entries are live tiles
 	 */
 	public static boolean[][] detect(BoardCompact board) {
+		// construct board and set all tiles to be dead
 		boolean[][] tiles = new boolean[board.width()][board.height()];
 		for (int i = 0; i < board.width(); i++) {
 			Arrays.fill(tiles[i], true);
 		}
 
-		// This is to retrieve the target for when we are using the DeadSquareTest. In our final own
-		// implementation this part will not be necessary
-		List<Pair> targets = new ArrayList<>();
+		// find all boxes and targets on the board
+		HashSet<Pair> targetsAndBoxes = new HashSet<>();
 		for (int x = 0; x < board.width(); x++) {
 			for (int y = 0; y < board.height(); y++) {
-				if(CTile.forBox(1, board.tiles[x][y])) {
-					targets.add(new Pair(x,y));
-				}
+				if(CTile.forBox(1, board.tiles[x][y])) targetsAndBoxes.add(new Pair(x, y));
+				if(CTile.isSomeBox(board.tiles[x][y])) targetsAndBoxes.add(new Pair(x, y));
 			}
 		}
 
-		for (Pair coord : targets) {
-		// End of code required for DeadSquareTest
+		// mark all boxes and targets as alive squares
+		for(Pair box : targetsAndBoxes) tiles[box.x][box.y] = false;
 
-//		for (Pair coord : MyAgent.targets) {
-			tiles[coord.x][coord.y] = false; //false is alive, true is dead
+		// for each box/target, expand outward and find the live neighboring squares
+		for (Pair coord : targetsAndBoxes) {
 			Queue<Pair> q = new LinkedList<>();
 			addNeighbours(coord, q, board);
 
 			while (!q.isEmpty()) {
 				Pair cur = q.poll();
+
 				if (!tiles[cur.x][cur.y]) continue; //if alive, continue.
 
 				if (CTile.isWall(board.tile(cur.x, cur.y))) continue; //Tile is not walkable, hence dead
@@ -235,14 +255,16 @@ class DeadSquareDetector {
 		//check above and below
 		if (coord.y != 0 && coord.y != board.height()-1) {
 			if (!tiles[coord.x][coord.y-1] && CTile.isWalkable(board.tile(coord.x, coord.y+1))
-					|| (!tiles[coord.x][coord.y+1] && CTile.isWalkable(board.tile(coord.x, coord.y-1))))
+					|| (!tiles[coord.x][coord.y+1] && CTile.isWalkable(board.tile(coord.x, coord.y-1)))
+					|| (!tiles[coord.x][coord.y+1] && !tiles[coord.x][coord.y-1]))
 				return true;
 		}
 		//check left and right
 		if (coord.x != 0 && coord.x != board.width()-1)
-            if (!tiles[coord.x-1][coord.y] && CTile.isWalkable(board.tile(coord.x+1, coord.y))
-                    || (!tiles[coord.x+1][coord.y] && CTile.isWalkable(board.tile(coord.x-1, coord.y))))
-                return true;
+			if (!tiles[coord.x-1][coord.y] && CTile.isWalkable(board.tile(coord.x+1, coord.y))
+					|| !tiles[coord.x+1][coord.y] && CTile.isWalkable(board.tile(coord.x-1, coord.y))
+					|| (!tiles[coord.x+1][coord.y] && !tiles[coord.x-1][coord.y]))
+				return true;
 		return false;
 	}
 }

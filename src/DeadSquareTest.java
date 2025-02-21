@@ -1,4 +1,7 @@
 import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 
 import game.board.compact.*;
 import game.board.oop.*;
@@ -49,6 +52,7 @@ public class DeadSquareTest {
                 System.out.println();
             }
             System.out.println();
+
         }
     }
 }
