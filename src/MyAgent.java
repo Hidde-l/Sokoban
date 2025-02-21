@@ -16,6 +16,7 @@ public class MyAgent extends ArtificialAgent {
 	
 	private HashSet<Pair> targets;
 	private boolean[][] deadSquares;
+	private int[][] hashValues;
 	
 	@Override
 	protected List<EDirection> think(BoardCompact board) {
@@ -27,6 +28,16 @@ public class MyAgent extends ArtificialAgent {
 		HashSet<Pair> boxes = new HashSet<>();
 		findBoxes(boxes);
 		this.deadSquares = DeadSquareDetector.detect(board);
+
+		// Construct the hash values for different states
+		// first column: the hash values of having a box at a certain square (row ind)
+		// second column: the hash value of having a person at a certain square (row ind)
+		// take a look at https://en.wikipedia.org/wiki/Zobrist_hashing
+		this.hashValues = new int[(board.width() - 1) * (board.height() - 1)][2];
+		for(int i = 0; i < hashValues.length; i++) {
+			hashValues[i][0] = new Random().nextInt();
+			hashValues[i][1] = new Random().nextInt();
+		}
 
 		// actually search
 		long searchStartMillis = System.currentTimeMillis();
@@ -49,14 +60,16 @@ public class MyAgent extends ArtificialAgent {
 	 */
 	private void search(HashSet<Pair> boxes) {
 		PriorityQueue<Node> queue = new PriorityQueue<>();
-		Set<BoardCompact> visited = new HashSet<>();
+		HashSet<Node> visited = new HashSet<>();
 
-		Node init = new Node(board, null, estimate(boxes), 0.0, null, boxes);
+		Node init = new Node(board, null, estimate(boxes), 0.0, null, boxes, hashValues);
 		queue.add(init);
 
 		while (!queue.isEmpty()) {
 			Node currentState = queue.poll();
-			visited.add(currentState.boardState);
+			if(visited.contains(currentState)) continue;
+
+			visited.add(currentState);
 
 			// if we found a solution, construct the list of actions taken and return
 			if(currentState.boardState.isVictory()) {
@@ -68,26 +81,29 @@ public class MyAgent extends ArtificialAgent {
 			allActions.addAll(CPush.getActions());
 
 			// loop over all the possible actions
-			for(CAction action : allActions){
+			for(CAction action : allActions) {
 				// if the action is possible then apply it to a cloned board
-				if(!action.isPossible(currentState.boardState)) continue;
+				if (!action.isPossible(currentState.boardState)) continue;
 				BoardCompact newState = currentState.boardState.clone();
 				action.perform(newState);
+				int newHash = currentState.calcNewHashcode(hashValues, action); // the hash value of the new state
 
 				// if we haven't been at this board state before, explore it further
-				if(!visited.contains(newState)) {
+				if (!visited.contains(new Node(newHash))) {
 					HashSet<Pair> newBoxes = cloneSet(currentState.boxes);
-					if(action.getClass() == CPush.class) {
+					if (action.getClass() == CPush.class) {
 						EDirection dir = action.getDirection();
 
 						// if the place you push to is a dead square, don't search this further
-						if(deadSquares[newState.playerX + dir.dX][newState.playerY + dir.dY]) continue;
+						if (deadSquares[newState.playerX + dir.dX][newState.playerY + dir.dY]) continue;
 
 						// update the location of the box
 						newBoxes.remove(new Pair(newState.playerX, newState.playerY));
 						newBoxes.add(new Pair(newState.playerX + dir.dX, newState.playerY + dir.dY));
 					}
-					queue.add(new Node(newState, action, estimate(newBoxes),currentState.distance + 1, currentState, newBoxes));
+
+					queue.add(new Node(newState, action, estimate(newBoxes), currentState.distance + 1, currentState, newBoxes, newHash));
+
 				}
 			}
 		}
@@ -134,50 +150,20 @@ public class MyAgent extends ArtificialAgent {
 
 	/**
 	 * Heuristic function to estimate cost.
-	 * Calculates hamming distance of minimum pairing of boxes and targets on the board.
+	 * Calculates hamming distance of box to nearest target on the board.
 	 *
 	 * @param boxes the hashset of box locations
 	 */
 	private int estimate(HashSet<Pair> boxes) {
-		int min = Integer.MAX_VALUE;
-
-        List<Pair> tar = new ArrayList<>(targets);
-		List<Pair> box = new ArrayList<>(boxes);
-
-		for (int start = 0; start < tar.size(); start++) {
-			int count = 0;
-			for (int ind = 0; ind < box.size(); ind++) {
-				count += tar.get(ind).distanceTo(box.get((ind + start) % box.size()));
+		int count = 0;
+		for(Pair box : boxes) {
+			int min = Integer.MAX_VALUE;
+			for(Pair tar : targets) {
+				min = Math.min(min, box.distanceTo(tar));
 			}
-			min = Math.min(min, count);
+			count += min;
 		}
-
-		return min;
-	}
-}
-
-class Pair {
-	int x, y;
-
-	Pair(int x, int y) {
-		this.x = x;
-		this.y = y;
-	}
-
-	@Override
-	public boolean equals(Object o) {
-		if (o == null || getClass() != o.getClass()) return false;
-		Pair pair = (Pair) o;
-		return x == pair.x && y == pair.y;
-	}
-
-	@Override
-	public int hashCode() {
-		return Objects.hash(x, y);
-	}
-
-	public int distanceTo(Pair p) {
-		return Math.abs(x - p.x) + Math.abs(y - p.y);
+		return count;
 	}
 }
 
@@ -272,20 +258,59 @@ class DeadSquareDetector {
 class Node implements Comparable<Node> {
 	BoardCompact boardState;
 	HashSet<Pair> boxes;
+	int hashcode;
 
 	CAction action;
 	double estimate;
 	double distance;
 	Node parent;
 
-
-	public Node(BoardCompact board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes) {
+	public Node(BoardCompact board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes, int[][] hashValues) {
 		this.boardState = board.clone();
 		this.action = action;
 		this.estimate = estimate;
 		this.distance = distance;
 		this.parent = parent;
 		this.boxes = boxes;
+
+		// calculate the hashcode by XORing the player position and all positions of the boxes
+		int h = hashValues[(boardState.playerX-1) + (boardState.playerY-1)*boardState.width()][1];
+		for (Pair p : boxes) h = h | hashValues[(p.x-1) + (p.y-1)* boardState.width()][0];
+		this.hashcode = h;
+	}
+
+	public Node(BoardCompact board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes, int hashcode) {
+		this.boardState = board.clone();
+		this.action = action;
+		this.estimate = estimate;
+		this.distance = distance;
+		this.parent = parent;
+		this.boxes = boxes;
+		this.hashcode = hashcode;
+	}
+
+	// just used for comparison
+	public Node(int hashcode){
+		this.hashcode = hashcode;
+	}
+
+	/**
+	 * Calculate the hashcode of a different board given an action that is applied
+	 * @param hashValues the list of hash values initially generated
+	 * @param action the action being made to move away from this board
+	 * @return the new hashcode
+	 */
+	public int calcNewHashcode(int[][] hashValues, CAction action) {
+		int h = hashcode;
+		EDirection dir = action.getDirection();
+
+		if(action.getClass() == CPush.class) { // if we are pushing, remove old position of box and add new one
+			h = h | hashValues[(boardState.playerX + dir.dX - 1) + (boardState.playerY + dir.dY -1)*boardState.width()][0];
+			h = h | hashValues[(boardState.playerX + 2*dir.dX -1) + (boardState.playerY + 2*dir.dY -1)*boardState.width()][0];
+		}
+		// move the player
+		h = h | hashValues[(boardState.playerX-1) + (boardState.playerY-1)*boardState.width()][1];
+		return h | hashValues[(boardState.playerX + dir.dX - 1) + (boardState.playerY + dir.dY - 1)*boardState.width()][1];
 	}
 
 	@Override
@@ -295,14 +320,38 @@ class Node implements Comparable<Node> {
 
 	@Override
 	public boolean equals(Object o) {
-		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		Node node = (Node) o;
-		return Double.compare(estimate, node.estimate) == 0 && Double.compare(distance, node.distance) == 0 && Objects.equals(boardState, node.boardState) && Objects.equals(action, node.action) && Objects.equals(parent, node.parent);
+		return hashcode == node.hashcode && Double.compare(estimate, node.estimate) == 0 && Double.compare(distance, node.distance) == 0 && Objects.equals(boardState, node.boardState) && Objects.equals(boxes, node.boxes) && Objects.equals(action, node.action) && Objects.equals(parent, node.parent);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(boardState, action, estimate, distance, parent);
+		return hashcode;
+	}
+}
+
+class Pair {
+	int x, y;
+
+	Pair(int x, int y) {
+		this.x = x;
+		this.y = y;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (o == null || getClass() != o.getClass()) return false;
+		Pair pair = (Pair) o;
+		return x == pair.x && y == pair.y;
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(x, y);
+	}
+
+	public int distanceTo(Pair p) {
+		return Math.abs(x - p.x) + Math.abs(y - p.y);
 	}
 }
