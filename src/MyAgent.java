@@ -60,19 +60,18 @@ public class MyAgent extends ArtificialAgent {
 	 */
 	private void search(HashSet<Pair> boxes) {
 		PriorityQueue<Node> queue = new PriorityQueue<>();
-		HashSet<Node> visited = new HashSet<>();
+		HashSet<BoardCompactExt> visited = new HashSet<>();
 
 		Node init = new Node(board, null, estimate(boxes), 0.0, null, boxes, hashValues);
 		queue.add(init);
 
 		while (!queue.isEmpty()) {
 			Node currentState = queue.poll();
-			if(visited.contains(currentState)) continue;
 
-			visited.add(currentState);
+			visited.add(currentState.boardState);
 
 			// if we found a solution, construct the list of actions taken and return
-			if(currentState.boardState.isVictory()) {
+			if(currentState.boardState.board.isVictory()) {
 				construct(currentState);
 				return;
 			}
@@ -83,13 +82,15 @@ public class MyAgent extends ArtificialAgent {
 			// loop over all the possible actions
 			for(CAction action : allActions) {
 				// if the action is possible then apply it to a cloned board
-				if (!action.isPossible(currentState.boardState)) continue;
-				BoardCompact newState = currentState.boardState.clone();
+				if (!action.isPossible(currentState.boardState.board)) continue;
+
+				BoardCompact newState = currentState.boardState.board.clone();
 				action.perform(newState);
-				int newHash = currentState.calcNewHashcode(hashValues, action); // the hash value of the new state
+				int newHash = currentState.boardState.calcNewHashcode(hashValues, action);
+				BoardCompactExt newBoard = new BoardCompactExt(newState, newHash);
 
 				// if we haven't been at this board state before, explore it further
-				if (!visited.contains(new Node(newHash))) {
+				if (!visited.contains(newBoard)) {
 					HashSet<Pair> newBoxes = cloneSet(currentState.boxes);
 					if (action.getClass() == CPush.class) {
 						EDirection dir = action.getDirection();
@@ -102,7 +103,7 @@ public class MyAgent extends ArtificialAgent {
 						newBoxes.add(new Pair(newState.playerX + dir.dX, newState.playerY + dir.dY));
 					}
 
-					queue.add(new Node(newState, action, estimate(newBoxes), currentState.distance + 1, currentState, newBoxes, newHash));
+					queue.add(new Node(newBoard, action, estimate(newBoxes), currentState.distance + 1, currentState, newBoxes));
 
 				}
 			}
@@ -256,9 +257,8 @@ class DeadSquareDetector {
 }
 
 class Node implements Comparable<Node> {
-	BoardCompact boardState;
+	BoardCompactExt boardState;
 	HashSet<Pair> boxes;
-	int hashcode;
 
 	CAction action;
 	double estimate;
@@ -266,7 +266,6 @@ class Node implements Comparable<Node> {
 	Node parent;
 
 	public Node(BoardCompact board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes, int[][] hashValues) {
-		this.boardState = board.clone();
 		this.action = action;
 		this.estimate = estimate;
 		this.distance = distance;
@@ -274,23 +273,34 @@ class Node implements Comparable<Node> {
 		this.boxes = boxes;
 
 		// calculate the hashcode by XORing the player position and all positions of the boxes
-		int h = hashValues[(boardState.playerX-1) + (boardState.playerY-1)*boardState.width()][1];
-		for (Pair p : boxes) h = h | hashValues[(p.x-1) + (p.y-1)* boardState.width()][0];
-		this.hashcode = h;
+		int h = hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
+		for (Pair p : boxes) h = h | hashValues[(p.x-1) + (p.y-1)* board.width()][0];
+
+		this.boardState = new BoardCompactExt(board.clone(), h);
 	}
 
-	public Node(BoardCompact board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes, int hashcode) {
-		this.boardState = board.clone();
+	public Node(BoardCompactExt board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes) {
+		this.boardState = board;
 		this.action = action;
 		this.estimate = estimate;
 		this.distance = distance;
 		this.parent = parent;
 		this.boxes = boxes;
-		this.hashcode = hashcode;
 	}
 
-	// just used for comparison
-	public Node(int hashcode){
+	@Override
+	public int compareTo(Node o) {
+		return Double.compare(this.estimate + this.distance, o.estimate + o.distance);
+	}
+
+}
+
+class BoardCompactExt {
+	BoardCompact board;
+	int hashcode;
+
+	public BoardCompactExt(BoardCompact board, int hashcode) {
+		this.board = board;
 		this.hashcode = hashcode;
 	}
 
@@ -305,24 +315,19 @@ class Node implements Comparable<Node> {
 		EDirection dir = action.getDirection();
 
 		if(action.getClass() == CPush.class) { // if we are pushing, remove old position of box and add new one
-			h = h | hashValues[(boardState.playerX + dir.dX - 1) + (boardState.playerY + dir.dY -1)*boardState.width()][0];
-			h = h | hashValues[(boardState.playerX + 2*dir.dX -1) + (boardState.playerY + 2*dir.dY -1)*boardState.width()][0];
+			h = h | hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY -1)*board.width()][0];
+			h = h | hashValues[(board.playerX + 2*dir.dX -1) + (board.playerY + 2*dir.dY -1)*board.width()][0];
 		}
 		// move the player
-		h = h | hashValues[(boardState.playerX-1) + (boardState.playerY-1)*boardState.width()][1];
-		return h | hashValues[(boardState.playerX + dir.dX - 1) + (boardState.playerY + dir.dY - 1)*boardState.width()][1];
-	}
-
-	@Override
-	public int compareTo(Node o) {
-		return Double.compare(this.estimate + this.distance, o.estimate + o.distance);
+		h = h | hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
+		return h | hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY - 1)*board.width()][1];
 	}
 
 	@Override
 	public boolean equals(Object o) {
 		if (o == null || getClass() != o.getClass()) return false;
-		Node node = (Node) o;
-		return hashcode == node.hashcode && Double.compare(estimate, node.estimate) == 0 && Double.compare(distance, node.distance) == 0 && Objects.equals(boardState, node.boardState) && Objects.equals(boxes, node.boxes) && Objects.equals(action, node.action) && Objects.equals(parent, node.parent);
+		BoardCompactExt that = (BoardCompactExt) o;
+		return hashcode == that.hashcode && board.equals(that.board);
 	}
 
 	@Override
@@ -330,6 +335,7 @@ class Node implements Comparable<Node> {
 		return hashcode;
 	}
 }
+
 
 class Pair {
 	int x, y;
