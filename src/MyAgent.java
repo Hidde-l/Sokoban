@@ -60,7 +60,7 @@ public class MyAgent extends ArtificialAgent {
 	 */
 	private void search(HashSet<Pair> boxes) {
 		PriorityQueue<Node> queue = new PriorityQueue<>();
-		HashSet<BoardCompactExt> visited = new HashSet<>();
+		HashSet<BoardCompactExt> visited = new HashSet<>(150);
 
 		Node init = new Node(board, null, estimate(boxes), 0.0, null, boxes, hashValues);
 		queue.add(init);
@@ -274,7 +274,7 @@ class Node implements Comparable<Node> {
 
 		// calculate the hashcode by XORing the player position and all positions of the boxes
 		int h = hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
-		for (Pair p : boxes) h = h | hashValues[(p.x-1) + (p.y-1)* board.width()][0];
+		for (Pair p : boxes) h = h ^ hashValues[(p.x-1) + (p.y-1)* board.width()][0];
 
 		this.boardState = new BoardCompactExt(board.clone(), h);
 	}
@@ -315,12 +315,12 @@ class BoardCompactExt {
 		EDirection dir = action.getDirection();
 
 		if(action.getClass() == CPush.class) { // if we are pushing, remove old position of box and add new one
-			h = h | hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY -1)*board.width()][0];
-			h = h | hashValues[(board.playerX + 2*dir.dX -1) + (board.playerY + 2*dir.dY -1)*board.width()][0];
+			h = h ^ hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY -1)*board.width()][0];
+			h = h ^ hashValues[(board.playerX + 2*dir.dX -1) + (board.playerY + 2*dir.dY -1)*board.width()][0];
 		}
 		// move the player
-		h = h | hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
-		return h | hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY - 1)*board.width()][1];
+		h = h ^ hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
+		return h ^ hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY - 1)*board.width()][1];
 	}
 
 	@Override
