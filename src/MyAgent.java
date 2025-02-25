@@ -10,10 +10,12 @@ import game.board.compact.CTile;
 
 
 public class MyAgent extends ArtificialAgent {
-	protected BoardCompact board;
+	// result
 	protected int searchedNodes;
 	protected List<EDirection> result;
-	
+
+	// level consistent values
+	protected BoardCompact board;
 	private HashSet<Pair> targets;
 	private boolean[][] deadSquares;
 	private int[][] hashValues;
@@ -43,7 +45,7 @@ public class MyAgent extends ArtificialAgent {
 		long searchStartMillis = System.currentTimeMillis();
 		search(boxes);
 		long searchTime = System.currentTimeMillis() - searchStartMillis;
-        
+
         if (verbose) {
             out.println("Nodes visited: " + searchedNodes);
             out.printf("Performance: %.1f nodes/sec\n",
@@ -67,11 +69,10 @@ public class MyAgent extends ArtificialAgent {
 
 		while (!queue.isEmpty()) {
 			Node currentState = queue.poll();
-
 			visited.add(currentState.boardState);
 
 			// if we found a solution, construct the list of actions taken and return
-			if(currentState.boardState.board.isVictory()) {
+			if(currentState.boardState.isVictory(targets)) {
 				construct(currentState);
 				return;
 			}
@@ -82,44 +83,21 @@ public class MyAgent extends ArtificialAgent {
 			// loop over all the possible actions
 			for(CAction action : allActions) {
 				// if the action is possible then apply it to a cloned board
-				if (!action.isPossible(currentState.boardState.board)) continue;
-
-				BoardCompact newState = currentState.boardState.board.clone();
-				action.perform(newState);
-				int newHash = currentState.boardState.calcNewHashcode(hashValues, action);
-				BoardCompactExt newBoard = new BoardCompactExt(newState, newHash);
+				if(!isPossible(action, currentState.boardState)) continue;
+				BoardCompactExt newState = currentState.boardState.perform(action);
+				newState.hashcode = currentState.boardState.calcNewHashcode(hashValues, action, board.width());
 
 				// if we haven't been at this board state before, explore it further
-				if (!visited.contains(newBoard)) {
-					HashSet<Pair> newBoxes = cloneSet(currentState.boxes);
-					if (action.getClass() == CPush.class) {
-						EDirection dir = action.getDirection();
+				if (!visited.contains(newState)) {
 
-						// if the place you push to is a dead square, don't search this further
-						if (deadSquares[newState.playerX + dir.dX][newState.playerY + dir.dY]) continue;
+					if (action.getClass() == CPush.class &&
+							deadSquares[newState.player.x + action.getDirection().dX][newState.player.y + action.getDirection().dY]) continue;
 
-						// update the location of the box
-						newBoxes.remove(new Pair(newState.playerX, newState.playerY));
-						newBoxes.add(new Pair(newState.playerX + dir.dX, newState.playerY + dir.dY));
-					}
-
-					queue.add(new Node(newBoard, action, estimate(newBoxes), currentState.distance + 1, currentState, newBoxes));
+					queue.add(new Node(newState, action, estimate(newState.boxes), currentState.distance + 1, currentState));
 
 				}
 			}
 		}
-	}
-
-	/**
-	 * Clone the set passed in.
-	 *
-	 * @param set the set to be cloned
-	 * @return a new set with all the same, cloned elements
-	 */
-	private HashSet<Pair> cloneSet(HashSet<Pair> set) {
-		HashSet<Pair> clone = new HashSet<>();
-		for(Pair p : set) clone.add(new Pair(p.x, p.y));
-		return clone;
 	}
 
 	/**
@@ -130,7 +108,7 @@ public class MyAgent extends ArtificialAgent {
 	private void construct(Node currentState) {
 		Node current = currentState;
 		while (current.parent != null) {
-			result.add(0, current.action.getDirection());
+			this.result.add(0, current.action.getDirection());
 			current = current.parent;
 		}
 	}
@@ -165,6 +143,21 @@ public class MyAgent extends ArtificialAgent {
 			count += min;
 		}
 		return count;
+	}
+
+	private boolean isPossible(CAction action, BoardCompactExt boardState) {
+		EDirection dir = action.getDirection();
+		Pair target = new Pair(boardState.player.x + dir.dX, boardState.player.y + dir.dY);
+		if(target.x < 0 || target.x >= board.width() || target.y < 0 || target.y >= board.height()) return false;
+
+		if(action.getClass() == CPush.class) {
+			Pair pushTo = new Pair(boardState.player.x + 2*dir.dX, boardState.player.y + 2*dir.dY);
+			if(pushTo.x < 0 || pushTo.x >= board.width() || pushTo.y < 0 || pushTo.y >= board.height()) return false;
+			if(boardState.boxes.contains(pushTo) || CTile.isWall(board.tile(pushTo.x, pushTo.y))) return false;
+			return boardState.boxes.contains(target);
+		}
+
+		return !(boardState.boxes.contains(target) || CTile.isWall(board.tile(target.x, target.y)));
 	}
 }
 
@@ -276,16 +269,15 @@ class Node implements Comparable<Node> {
 		int h = hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
 		for (Pair p : boxes) h = h ^ hashValues[(p.x-1) + (p.y-1)* board.width()][0];
 
-		this.boardState = new BoardCompactExt(board.clone(), h);
+		this.boardState = new BoardCompactExt(boxes, new Pair(board.playerX, board.playerY), h);
 	}
 
-	public Node(BoardCompactExt board, CAction action, double estimate, double distance, Node parent, HashSet<Pair> boxes) {
+	public Node(BoardCompactExt board, CAction action, double estimate, double distance, Node parent) {
 		this.boardState = board;
 		this.action = action;
 		this.estimate = estimate;
 		this.distance = distance;
 		this.parent = parent;
-		this.boxes = boxes;
 	}
 
 	@Override
@@ -296,11 +288,14 @@ class Node implements Comparable<Node> {
 }
 
 class BoardCompactExt {
-	BoardCompact board;
+	//BoardCompact board;
+	HashSet<Pair> boxes;
+	Pair player;
 	int hashcode;
 
-	public BoardCompactExt(BoardCompact board, int hashcode) {
-		this.board = board;
+	public BoardCompactExt(HashSet<Pair> boxes, Pair player, int hashcode) {
+		this.boxes = boxes;
+		this.player = player;
 		this.hashcode = hashcode;
 	}
 
@@ -308,26 +303,50 @@ class BoardCompactExt {
 	 * Calculate the hashcode of a different board given an action that is applied
 	 * @param hashValues the list of hash values initially generated
 	 * @param action the action being made to move away from this board
+	 * @param width the width of the board
 	 * @return the new hashcode
 	 */
-	public int calcNewHashcode(int[][] hashValues, CAction action) {
+	public int calcNewHashcode(int[][] hashValues, CAction action, int width) {
 		int h = hashcode;
 		EDirection dir = action.getDirection();
 
 		if(action.getClass() == CPush.class) { // if we are pushing, remove old position of box and add new one
-			h = h ^ hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY -1)*board.width()][0];
-			h = h ^ hashValues[(board.playerX + 2*dir.dX -1) + (board.playerY + 2*dir.dY -1)*board.width()][0];
+			h = h ^ hashValues[(player.x + dir.dX -1) + (player.y + dir.dY -1)*width][0];
+			h = h ^ hashValues[(player.x + 2*dir.dX -1) + (player.y + 2*dir.dY -1)*width][0];
 		}
 		// move the player
-		h = h ^ hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
-		return h ^ hashValues[(board.playerX + dir.dX - 1) + (board.playerY + dir.dY - 1)*board.width()][1];
+		h = h ^ hashValues[(player.x-1) + (player.y-1)*width][1];
+		return h ^ hashValues[(player.x + dir.dX -1) + (player.y + dir.dY -1)*width][1];
+	}
+
+	public BoardCompactExt perform(CAction action) {
+		HashSet<Pair> clonedSet = new HashSet<>();
+		for(Pair p : boxes) clonedSet.add(new Pair(p.x, p.y));
+
+		BoardCompactExt cloned = new BoardCompactExt(clonedSet, new Pair(player.x, player.y), hashcode);
+		EDirection dir = action.getDirection();
+
+		cloned.player = new Pair(this.player.x + dir.dX, this.player.y + dir.dY);
+
+		if (action.getClass() == CPush.class) {
+			// update the location of the box
+			cloned.boxes.remove(new Pair(cloned.player.x, cloned.player.y));
+			cloned.boxes.add(new Pair(cloned.player.x + dir.dX, cloned.player.y + dir.dY));
+		}
+
+		return cloned;
+	}
+
+	public boolean isVictory(HashSet<Pair> targets) {
+		for (Pair box : boxes) if(!targets.contains(box)) return false;
+		return true;
 	}
 
 	@Override
 	public boolean equals(Object o) {
 		if (o == null || getClass() != o.getClass()) return false;
 		BoardCompactExt that = (BoardCompactExt) o;
-		return hashcode == that.hashcode && board.equals(that.board);
+		return hashcode == that.hashcode && Objects.equals(boxes, that.boxes) && Objects.equals(player, that.player);
 	}
 
 	@Override
