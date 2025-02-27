@@ -2,7 +2,7 @@ package agents.TenetAgent;
 
 import java.util.Objects;
 
-private class Pair {
+public class Pair {
     int x, y;
 
     Pair(int x, int y) {
