@@ -4,6 +4,7 @@ import game.board.compact.BoardCompact;
 import game.board.compact.CTile;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 public class TenetBoard {
@@ -28,46 +29,53 @@ public class TenetBoard {
         for (int x = 0; x < board.width(); x++) {
             for (int y = 0; y < board.height(); y++) {
                 if (!CTile.isWall(board.tiles[x][y])) tiles[x][y] = 1;
+                if (CTile.forBox(1, board.tiles[x][y])) tenetBoxes.add(new Pair(x, y));
             }
         }
     }
 
     /**
      * Constructor from a different TenetBoard
-     * @param board
+     * @param tboard
      */
-    public TenetBoard(TenetBoard board) {
-        this.tiles = new int[tiles.length][tiles[0].length];
-        this.boxInPlaceCount = board.boxInPlaceCount;
-        this.playerX = board.playerX;
-        this.playerY = board.playerY;
-        this.tenetBoxes = board.tenetBoxes;
-
+    public TenetBoard(TenetBoard tboard) {
+        this.tiles = new int[tboard.tiles.length][tboard.tiles[0].length];
+        this.boxInPlaceCount = tboard.boxInPlaceCount;
+        this.playerX = tboard.playerX;
+        this.playerY = tboard.playerY;
+        this.tenetBoxes = new HashSet<Pair>();
+        for (Pair p : tboard.tenetBoxes) {
+            this.tenetBoxes.add(new Pair(p.x, p.y));
+        }
 
         for (int x = 0; x < this.tiles.length; x++) {
             for (int y = 0; y < this.tiles[0].length; y++) {
-                this.tiles[x][y] = board.tiles[x][y];
+                this.tiles[x][y] = tboard.tiles[x][y];
             }
         }
     }
 
     /**
      * Constructor for a TenetBoard given a board, a set of tenetBoxes, and a player location
-     * @param board another TenetBoard
+     *
+     * @param tboard another TenetBoard
      * @param tenetBoxes A set of Pairs of tenetBoxes
      * @param playerX x location of the player
      * @param playerY y location of the player
      */
-    public TenetBoard(TenetBoard board, HashSet<Pair> tenetBoxes, int playerX, int playerY) {
-        this.tiles = new int[board.tiles.length][board.tiles[0].length];
-        this.boxInPlaceCount = board.boxInPlaceCount;
+    public TenetBoard(TenetBoard tboard, HashSet<Pair> tenetBoxes, int playerX, int playerY) {
+        this.tiles = new int[tboard.tiles.length][tboard.tiles[0].length];
+        this.boxInPlaceCount = tboard.boxInPlaceCount;
         this.playerX = playerX;
         this.playerY = playerY;
-        this.tenetBoxes = tenetBoxes;
+        this.tenetBoxes = new HashSet<Pair>();
+        for (Pair p : tenetBoxes) {
+            this.tenetBoxes.add(new Pair(p.x, p.y));
+        }
 
         for (int x = 0; x < this.tiles.length; x++) {
             for (int y = 0; y < this.tiles[0].length; y++) {
-                if (!CTile.isWall(board.tiles[x][y])) tiles[x][y] = 1;
+                this.tiles[x][y] = tboard.tiles[x][y];
             }
         }
     }
@@ -78,7 +86,7 @@ public class TenetBoard {
      * @return boolean for whether each box is in place
      */
     public boolean isVictory(Set<Pair> boxes, Set<Pair> targets) {
-        for (Pair box : boxes) if(!targets.contains(box)) return false;
+        for (Pair box : boxes) if (!targets.contains(box)) return false;
         return true;
     }
 
@@ -93,7 +101,7 @@ public class TenetBoard {
     }
 
     /**
-     * Performs an action on a board. Changes the state of the board!
+     * Returns a copy of the given board, with an action performed
      *
      * @param action The action you want to peform. NOTE that it is assumed this action is possible!
      */
@@ -107,5 +115,18 @@ public class TenetBoard {
         }
 
         return new TenetBoard(this, clonedTenetBoxes, playerX+action.direction.dX, playerY+action.direction.dY);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TenetBoard that = (TenetBoard) o;
+        return playerX == that.playerX && playerY == that.playerY && Objects.equals(tenetBoxes, that.tenetBoxes);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(playerX, playerY, tenetBoxes);
     }
 }
