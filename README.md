@@ -1,3 +1,16 @@
+# Sokoban Solver
+
+This repo holds two solvers for the Sokoban puzzle game. The implementations are written for Sokoban4J (see below) and are optimised for speed. To run them, use the following configurations:
+MyAgent (A* with a more compact board datastructure and deadsquare detection)
+main class: SokobanMain
+program arguments: MyAgent
+
+TenetAgent (A* but with all new datastructures. Pulls boxes instead of pushing them to avoid deadsquares without manually checking for them)
+main class: SokobanMain
+program arguments: Agent.TenetAgent
+
+The solver only works for problem sets with one box colour, such as Aymeric_Medium and Aymeric_Hard.
+
 # Sokoban4J
 
 ![alt tag](https://github.com/kefik/Sokoban4J/raw/master/Sokoban4J/screenshot.png)
