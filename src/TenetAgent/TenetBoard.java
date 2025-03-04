@@ -1,4 +1,4 @@
-package agents.TenetAgent;
+package TenetAgent;
 
 import game.board.compact.BoardCompact;
 import game.board.compact.CTile;

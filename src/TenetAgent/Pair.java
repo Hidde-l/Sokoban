@@ -1,4 +1,4 @@
-package agents.TenetAgent;
+package TenetAgent;
 
 import java.util.Objects;
 
@@ -19,7 +19,7 @@ public class Pair {
 
     @Override
     public int hashCode() {
-        return Objects.hash(x, y);
+        return 31*x + y;//Objects.hash(x, y);
     }
     public int distanceTo(Pair p) {
         return Math.abs(x - p.x) + Math.abs(y - p.y);

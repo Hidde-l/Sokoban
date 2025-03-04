@@ -1,8 +1,6 @@
-package agents.TenetAgent;
+package TenetAgent;
 
 import game.actions.EDirection;
-import game.actions.compact.CAction;
-import game.actions.compact.CPush;
 
 import java.util.HashSet;
 import java.util.Objects;

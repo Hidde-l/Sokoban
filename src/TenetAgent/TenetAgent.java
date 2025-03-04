@@ -1,9 +1,7 @@
-package agents.TenetAgent;
+package TenetAgent;
 
 import agents.ArtificialAgent;
 import game.actions.EDirection;
-import game.actions.compact.CAction;
-import game.actions.compact.CPush;
 import game.board.compact.BoardCompact;
 import game.board.compact.CTile;
 
@@ -24,6 +22,7 @@ public class TenetAgent extends ArtificialAgent {
 
     @Override
     protected List<EDirection> think(BoardCompact board) {
+        long searchStartMillis = System.currentTimeMillis();
         // initialize everything
         this.board = board;
         this.tenetTargets = new HashSet<>();
@@ -45,7 +44,6 @@ public class TenetAgent extends ArtificialAgent {
         }
 
         // actually search
-        long searchStartMillis = System.currentTimeMillis();
         search(tenetBoxes);
         long searchTime = System.currentTimeMillis() - searchStartMillis;
 
@@ -67,7 +65,7 @@ public class TenetAgent extends ArtificialAgent {
      */
     private void search(HashSet<Pair> tenetBoxes) {
         PriorityQueue<Node> queue = new PriorityQueue<>();
-        HashSet<BoardCompactExt> visited = new HashSet<>(150);
+        HashSet<BoardCompactExt> visited = new HashSet<>();
 
         //Add starting positions to the queue
         for (Pair p : tenetBoxes) {
@@ -125,10 +123,7 @@ public class TenetAgent extends ArtificialAgent {
      * @return boolean whether the player x and y are the same as any box's x and y
      */
     public boolean playerOnBox(BoardCompactExt board, TAction action) {
-        for (Pair p : board.boxes) {
-            if (board.player.x+action.direction.dX == p.x && board.player.y+action.direction.dY == p.y) return true;
-        }
-        return false;
+        return board.boxes.contains(new Pair(board.player.x+action.direction.dX, board.player.y+action.direction.dY));
     }
 
     /**

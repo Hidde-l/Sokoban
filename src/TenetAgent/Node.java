@@ -1,6 +1,5 @@
-package agents.TenetAgent;
+package TenetAgent;
 
-import game.actions.compact.CAction;
 import game.board.compact.BoardCompact;
 
 import java.util.HashSet;

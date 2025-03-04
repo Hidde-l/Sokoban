@@ -1,4 +1,4 @@
-package agents.TenetAgent;
+package TenetAgent;
 
 import game.actions.EDirection;
 import game.actions.compact.CAction;

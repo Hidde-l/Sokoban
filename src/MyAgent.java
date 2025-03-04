@@ -134,6 +134,19 @@ public class MyAgent extends ArtificialAgent {
 	 * @param boxes the hashset of box locations
 	 */
 	private int estimate(HashSet<Pair> boxes) {
+
+		/*
+		int min = 0;
+
+		// BFS FOR EACH BOX TO TARGETS
+		for(Pair box: boxes) {
+			min += BFS(box);
+		}
+
+		return min;
+		*/
+
+
 		int count = 0;
 		for(Pair box : boxes) {
 			int min = Integer.MAX_VALUE;
@@ -143,6 +156,39 @@ public class MyAgent extends ArtificialAgent {
 			count += min;
 		}
 		return count;
+
+	}
+
+	private int BFS(Pair initial) {
+		class Helper {
+			final Pair pair;
+			final int distance;
+
+			Helper(Pair pair, int distance) {
+				this.pair = pair;
+				this.distance = distance;
+			}
+		}
+
+		Queue<Helper> queue = new LinkedList<>();
+		queue.add(new Helper(initial, 0));
+		HashSet<Pair> visited = new HashSet<>();
+
+		while(!queue.isEmpty()) {
+			Helper c = queue.poll();
+			if(visited.contains(c.pair)) continue;
+			visited.add(c.pair);
+
+			if(CTile.forBox(1, board.tile(c.pair.x, c.pair.y))) {
+				return c.distance;
+			}
+
+			for(Pair neighbor : List.of(new Pair(c.pair.x +1, c.pair.y), new Pair(c.pair.x -1, c.pair.y),
+					new Pair(c.pair.x, c.pair.y+1), new Pair(c.pair.x, c.pair.y-1))) {
+				if(!CTile.isWall(board.tile(neighbor.x, neighbor.y))) queue.add(new Helper(neighbor, c.distance + 1));
+			}
+		}
+		return Integer.MAX_VALUE;
 	}
 
 	private boolean isPossible(CAction action, BoardCompactExt boardState) {
@@ -251,7 +297,6 @@ class DeadSquareDetector {
 
 class Node implements Comparable<Node> {
 	BoardCompactExt boardState;
-	HashSet<Pair> boxes;
 
 	CAction action;
 	double estimate;
@@ -263,7 +308,6 @@ class Node implements Comparable<Node> {
 		this.estimate = estimate;
 		this.distance = distance;
 		this.parent = parent;
-		this.boxes = boxes;
 
 		// calculate the hashcode by XORing the player position and all positions of the boxes
 		int h = hashValues[(board.playerX-1) + (board.playerY-1)*board.width()][1];
