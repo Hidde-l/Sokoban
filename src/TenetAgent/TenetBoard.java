@@ -7,6 +7,8 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
+//Deprecated class
+
 public class TenetBoard {
     public int[][] tiles; // Value 0: wall || Value 1: Free Space
     public int boxInPlaceCount;
@@ -36,6 +38,7 @@ public class TenetBoard {
 
     /**
      * Constructor from a different TenetBoard
+     *
      * @param tboard
      */
     public TenetBoard(TenetBoard tboard) {

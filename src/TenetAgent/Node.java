@@ -39,7 +39,4 @@ class Node implements Comparable<Node> {
     public int compareTo(Node o) {
         return Double.compare(this.estimate + this.distance, o.estimate + o.distance);
     }
-
 }
-
-

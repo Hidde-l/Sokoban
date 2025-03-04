@@ -15,6 +15,11 @@ public class Pair {
         return x == pair.x && y == pair.y;
     }
 
+    /**
+     * Minimised hashcode for speed
+     *
+     * @return a hash
+     */
     @Override
     public int hashCode() {
         return 31*x + y;

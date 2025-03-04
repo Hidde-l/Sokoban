@@ -105,15 +105,27 @@ public class TenetAgent extends ArtificialAgent {
         }
     }
 
+    /**
+     * Checks whether an action is possible on a given board
+     *
+     * @param action The action to be performed
+     * @param boardState The board to perform an action on
+     * @return a boolean value indicating whether an action is possible or not
+     */
     private boolean isPossible(TAction action, BoardCompactExt boardState) {
         EDirection dir = action.getDirection();
         Pair target = new Pair(boardState.player.x + dir.dX, boardState.player.y + dir.dY);
+
+        // Check that moving does not put Sokoban outside the map, in a wall, or in a box
         if(target.x < 0 || target.x >= board.width() || target.y < 0 || target.y >= board.height()
                 || CTile.isWall(board.tiles[target.x][target.y])
                 || playerOnBox(boardState, action)) return false;
-        if (action.pull) { //Is there a box to pull in this direction?
+
+        // Checks that for all pull actions there is a box to pull
+        if (action.pull) {
             return boardState.boxes.contains(new Pair(boardState.player.x-dir.dX, boardState.player.y-dir.dY));
         }
+
         return true;
     }
 
@@ -128,7 +140,7 @@ public class TenetAgent extends ArtificialAgent {
     }
 
     /**
-     * Simplest heuristic possible: Number of boxes on a target
+     * A relatively simple heuristic which checks the smallest manhattan distance of each box to a unique board
      *
      * @param boxes List of box locations
      * @return number of boxes - number of boxes on a target
@@ -176,7 +188,7 @@ public class TenetAgent extends ArtificialAgent {
      * Fills the allActions list with all possible actions, for faster access later on
      */
     private void generateAllActions() {
-        this.allActions = new ArrayList<TAction>();
+        this.allActions = new ArrayList<>();
         this.allActions.add(new TAction(EDirection.UP, false));
         this.allActions.add(new TAction(EDirection.RIGHT, false));
         this.allActions.add(new TAction(EDirection.DOWN, false));
