@@ -2,6 +2,8 @@ package agents.TenetAgent;
 
 import agents.ArtificialAgent;
 import game.actions.EDirection;
+import game.actions.compact.CAction;
+import game.actions.compact.CPush;
 import game.board.compact.BoardCompact;
 import game.board.compact.CTile;
 
@@ -11,19 +13,19 @@ import static java.lang.System.out;
 
 public class TenetAgent extends ArtificialAgent {
     protected BoardCompact board;
-    protected TenetBoard tboard;
+//    protected TenetBoard tboard;
     protected HashSet<Pair> tenetTargets;
     protected List<TAction> allActions;
     protected int searchedNodes;
     protected Pair tenetEndLocation;
     protected List<EDirection> result;
+    private int[][] hashValues;
 
 
     @Override
     protected List<EDirection> think(BoardCompact board) {
         // initialize everything
         this.board = board;
-        this.tboard = new TenetBoard(board);
         this.tenetTargets = new HashSet<>();
         HashSet<Pair> tenetBoxes = new HashSet<>();
         findTenetTargetsAndBoxes(tenetBoxes);
@@ -31,6 +33,16 @@ public class TenetAgent extends ArtificialAgent {
         searchedNodes = 0;
         this.tenetEndLocation = new Pair(board.playerX, board.playerY);
         this.result = new ArrayList<>();
+
+        // Construct the hash values for different states
+        // first column: the hash values of having a box at a certain square (row ind)
+        // second column: the hash value of having a person at a certain square (row ind)
+        // take a look at https://en.wikipedia.org/wiki/Zobrist_hashing
+        this.hashValues = new int[(board.width() - 1) * (board.height() - 1)][2];
+        for(int i = 0; i < hashValues.length; i++) {
+            hashValues[i][0] = new Random().nextInt();
+            hashValues[i][1] = new Random().nextInt();
+        }
 
         // actually search
         long searchStartMillis = System.currentTimeMillis();
@@ -55,18 +67,18 @@ public class TenetAgent extends ArtificialAgent {
      */
     private void search(HashSet<Pair> tenetBoxes) {
         PriorityQueue<Node> queue = new PriorityQueue<>();
-        HashSet<TenetBoard> visited = new HashSet<>(150);
+        HashSet<BoardCompactExt> visited = new HashSet<>(150);
 
         //Add starting positions to the queue
         for (Pair p : tenetBoxes) {
-            if (tboard.tiles[p.x + 1][p.y] == 1 && !tenetBoxes.contains(new Pair(p.x+1, p.y)))
-                queue.add(new Node(new TenetBoard(tboard, tenetBoxes, p.x+1, p.y), tenetBoxes, null, estimate(tenetBoxes), 0.0, null));
-            if (tboard.tiles[p.x - 1][p.y] == 1 && !tenetBoxes.contains(new Pair(p.x-1, p.y)))
-                queue.add(new Node(new TenetBoard(tboard, tenetBoxes, p.x-1, p.y), tenetBoxes, null, estimate(tenetBoxes), 0.0, null));
-            if (tboard.tiles[p.x][p.y + 1] == 1 && !tenetBoxes.contains(new Pair(p.x, p.y+1)))
-                queue.add(new Node(new TenetBoard(tboard, tenetBoxes, p.x, p.y+1), tenetBoxes, null, estimate(tenetBoxes), 0.0, null));
-            if (tboard.tiles[p.x][p.y - 1] == 1 && !tenetBoxes.contains(new Pair(p.x, p.y-1)))
-                queue.add(new Node(new TenetBoard(tboard, tenetBoxes, p.x, p.y-1), tenetBoxes, null, estimate(tenetBoxes), 0.0, null));
+            if (!CTile.isWall(board.tiles[p.x + 1][p.y]) && !tenetBoxes.contains(new Pair(p.x+1, p.y)))
+                queue.add(new Node(board, estimate(tenetBoxes),tenetBoxes, hashValues, new Pair(p.x+1, p.y)));
+            if (!CTile.isWall(board.tiles[p.x - 1][p.y]) && !tenetBoxes.contains(new Pair(p.x-1, p.y)))
+                queue.add(new Node(board, estimate(tenetBoxes),tenetBoxes, hashValues, new Pair(p.x-1, p.y)));
+            if (!CTile.isWall(board.tiles[p.x][p.y + 1]) && !tenetBoxes.contains(new Pair(p.x, p.y+1)))
+                queue.add(new Node(board, estimate(tenetBoxes),tenetBoxes, hashValues, new Pair(p.x, p.y+1)));
+            if (!CTile.isWall(board.tiles[p.x][p.y - 1]) && !tenetBoxes.contains(new Pair(p.x, p.y-1)))
+                queue.add(new Node(board, estimate(tenetBoxes),tenetBoxes, hashValues, new Pair(p.x, p.y-1)));
         }
 
         while (!queue.isEmpty()) {
@@ -74,24 +86,49 @@ public class TenetAgent extends ArtificialAgent {
             visited.add(currentState.boardState);
 
             // if we found a solution, construct the list of actions taken and return
-            if(currentState.boardState.isVictory(currentState.tenetBoxes, tenetTargets)
-                && currentState.boardState.playerX == tenetEndLocation.x && currentState.boardState.playerY == tenetEndLocation.y) {
-                construct(currentState, currentState.boardState);
+            if(currentState.boardState.isVictory(tenetTargets)
+                && currentState.boardState.player.x == tenetEndLocation.x && currentState.boardState.player.y == tenetEndLocation.y) {
+                construct(currentState);
                 return;
             }
 
             // loop over all the possible actions
-            for(TAction action : allActions){
+            for(TAction action : allActions) {
                 // if the action is possible then apply it to a cloned board
-                if(!action.isPossible(currentState.boardState)) continue;
-                TenetBoard newState = currentState.boardState.perform(action);
+                if(!isPossible(action, currentState.boardState)) continue;
+                BoardCompactExt newState = currentState.boardState.perform(action);
+                newState.hashcode = currentState.boardState.calcNewHashcode(hashValues, action, board.width());
 
                 // if we haven't been at this board state before, explore it further
                 if(!visited.contains(newState)) {
-                    queue.add(new Node(newState, newState.tenetBoxes, action, estimate(newState.tenetBoxes),currentState.distance + 1, currentState));
+                    queue.add(new Node(newState, action, estimate(newState.boxes), currentState.distance + 1, currentState));
                 }
             }
         }
+    }
+
+    private boolean isPossible(TAction action, BoardCompactExt boardState) {
+        EDirection dir = action.getDirection();
+        Pair target = new Pair(boardState.player.x + dir.dX, boardState.player.y + dir.dY);
+        if(target.x < 0 || target.x >= board.width() || target.y < 0 || target.y >= board.height()
+                || CTile.isWall(board.tiles[target.x][target.y]) || playerOnBox(boardState, action)) return false;
+        if (action.pull) { //Is there a box to pull in this direction?
+            return boardState.boxes.contains(new Pair(boardState.player.x-dir.dX, boardState.player.y-dir.dY));
+        }
+        return true;
+    }
+
+    /**
+     * Checks whether a player is on a box
+     *
+     * @param board the board we are using
+     * @return boolean whether the player x and y are the same as any box's x and y
+     */
+    public boolean playerOnBox(BoardCompactExt board, TAction action) {
+        for (Pair p : board.boxes) {
+            if (board.player.x+action.direction.dX == p.x && board.player.y+action.direction.dY == p.y) return true;
+        }
+        return false;
     }
 
     /**
@@ -111,7 +148,7 @@ public class TenetAgent extends ArtificialAgent {
      *
      * @param currentState the final state the A* search found
      */
-    private void construct(Node currentState, TenetBoard tboard) {
+    private void construct(Node currentState) {
         Node current = currentState;
         while (current.parent != null) {
             this.result.add(current.action.getReverseDirection());

@@ -1,19 +1,35 @@
 package agents.TenetAgent;
 
+import game.actions.compact.CAction;
+import game.board.compact.BoardCompact;
+
 import java.util.HashSet;
 import java.util.Objects;
 
 class Node implements Comparable<Node> {
-    TenetBoard boardState;
+    BoardCompactExt boardState;
     HashSet<Pair> tenetBoxes;
     TAction action;
     double estimate;
     double distance;
     Node parent;
 
-    public Node(TenetBoard tboard, HashSet<Pair> tenetBoxes, TAction action, double estimate, double distance, Node parent) {
-        this.boardState = tboard.clone();
+    public Node(BoardCompact board, double estimate, HashSet<Pair> tenetBoxes, int[][] hashValues, Pair player) {
+        this.action = null;
+        this.estimate = estimate;
+        this.distance = 0.0;
+        this.parent = null;
         this.tenetBoxes = tenetBoxes;
+
+        // calculate the hashcode by XORing the player position and all positions of the boxes
+        int h = hashValues[(player.x-1) + (player.y-1)*board.width()][1];
+        for (Pair p : tenetBoxes) h = h ^ hashValues[(p.x-1) + (p.y-1)* board.width()][0];
+
+        this.boardState = new BoardCompactExt(tenetBoxes, new Pair(player.x, player.y), h);
+    }
+
+    public Node(BoardCompactExt board, TAction action, double estimate, double distance, Node parent) {
+        this.boardState = board;
         this.action = action;
         this.estimate = estimate;
         this.distance = distance;
@@ -30,7 +46,7 @@ class Node implements Comparable<Node> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Node node = (Node) o;
-        return Double.compare(estimate, node.estimate) == 0 && Double.compare(distance, node.distance) == 0 && Objects.equals(boardState, node.boardState) && Objects.equals(action, node.action) && Objects.equals(parent, node.parent);
+        return Double.compare(this.estimate, node.estimate) == 0 && Double.compare(distance, node.distance) == 0 && Objects.equals(boardState, node.boardState) && Objects.equals(action, node.action) && Objects.equals(parent, node.parent);
     }
 
     @Override
@@ -38,3 +54,5 @@ class Node implements Comparable<Node> {
         return Objects.hash(boardState, action, estimate, distance, parent);
     }
 }
+
+
