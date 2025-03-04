@@ -137,10 +137,21 @@ public class TenetAgent extends ArtificialAgent {
      * @param boxes List of box locations
      * @return number of boxes - number of boxes on a target
      */
-    private double estimate(HashSet<Pair> boxes) {
-        double r = board.boxCount;
-        for (Pair box : boxes) if (tenetTargets.contains(box)) r -= 1;
-        return r;
+//    private double estimate(HashSet<Pair> boxes) {
+//        double r = board.boxCount;
+//        for (Pair box : boxes) if (tenetTargets.contains(box)) r -= 1;
+//        return r;
+//    }
+    private int estimate(HashSet<Pair> boxes) {
+        int count = 0;
+        for(Pair box : boxes) {
+            int min = Integer.MAX_VALUE;
+            for(Pair tar : tenetTargets) {
+                min = Math.min(min, box.distanceTo(tar));
+            }
+            count += min;
+        }
+        return count;
     }
 
     /**
