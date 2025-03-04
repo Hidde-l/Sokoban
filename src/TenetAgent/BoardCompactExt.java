@@ -38,7 +38,6 @@ public class BoardCompactExt {
 
     public BoardCompactExt perform(TAction action) {
         HashSet<Pair> clonedSet = new HashSet<>();
-        for(Pair p : boxes) clonedSet.add(new Pair(p.x, p.y));
 
         BoardCompactExt cloned = new BoardCompactExt(clonedSet, new Pair(player.x, player.y), hashcode);
         EDirection dir = action.getDirection();
@@ -46,9 +45,12 @@ public class BoardCompactExt {
         cloned.player = new Pair(this.player.x + dir.dX, this.player.y + dir.dY);
 
         if (action.pull) {
+            for(Pair p : boxes) cloned.boxes.add(new Pair(p.x, p.y));
             // update the location of the box
             cloned.boxes.remove(new Pair(this.player.x-action.direction.dX, this.player.y-action.direction.dY));
             cloned.boxes.add(new Pair(this.player.x, this.player.y));
+        } else {
+            cloned.boxes = boxes;
         }
 
         return cloned;
@@ -61,9 +63,7 @@ public class BoardCompactExt {
 
     @Override
     public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) return false;
-        BoardCompactExt that = (BoardCompactExt) o;
-        return hashcode == that.hashcode && Objects.equals(boxes, that.boxes) && Objects.equals(player, that.player);
+        return hashcode == o.hashCode();
     }
 
     @Override

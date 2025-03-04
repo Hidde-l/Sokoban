@@ -40,18 +40,6 @@ class Node implements Comparable<Node> {
         return Double.compare(this.estimate + this.distance, o.estimate + o.distance);
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Node node = (Node) o;
-        return Double.compare(this.estimate, node.estimate) == 0 && Double.compare(distance, node.distance) == 0 && Objects.equals(boardState, node.boardState) && Objects.equals(action, node.action) && Objects.equals(parent, node.parent);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(boardState, action, estimate, distance, parent);
-    }
 }
 
 

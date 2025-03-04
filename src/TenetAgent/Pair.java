@@ -1,7 +1,5 @@
 package TenetAgent;
 
-import java.util.Objects;
-
 public class Pair {
     int x, y;
 
@@ -19,7 +17,7 @@ public class Pair {
 
     @Override
     public int hashCode() {
-        return 31*x + y;//Objects.hash(x, y);
+        return 31*x + y;
     }
     public int distanceTo(Pair p) {
         return Math.abs(x - p.x) + Math.abs(y - p.y);

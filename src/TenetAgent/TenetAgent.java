@@ -11,7 +11,7 @@ import static java.lang.System.out;
 
 public class TenetAgent extends ArtificialAgent {
     protected BoardCompact board;
-//    protected TenetBoard tboard;
+
     protected HashSet<Pair> tenetTargets;
     protected List<TAction> allActions;
     protected int searchedNodes;
@@ -84,8 +84,8 @@ public class TenetAgent extends ArtificialAgent {
             visited.add(currentState.boardState);
 
             // if we found a solution, construct the list of actions taken and return
-            if(currentState.boardState.isVictory(tenetTargets)
-                && currentState.boardState.player.x == tenetEndLocation.x && currentState.boardState.player.y == tenetEndLocation.y) {
+            if(currentState.boardState.player.x == tenetEndLocation.x && currentState.boardState.player.y == tenetEndLocation.y
+                && currentState.boardState.isVictory(tenetTargets)) {
                 construct(currentState);
                 return;
             }
@@ -109,7 +109,8 @@ public class TenetAgent extends ArtificialAgent {
         EDirection dir = action.getDirection();
         Pair target = new Pair(boardState.player.x + dir.dX, boardState.player.y + dir.dY);
         if(target.x < 0 || target.x >= board.width() || target.y < 0 || target.y >= board.height()
-                || CTile.isWall(board.tiles[target.x][target.y]) || playerOnBox(boardState, action)) return false;
+                || CTile.isWall(board.tiles[target.x][target.y])
+                || playerOnBox(boardState, action)) return false;
         if (action.pull) { //Is there a box to pull in this direction?
             return boardState.boxes.contains(new Pair(boardState.player.x-dir.dX, boardState.player.y-dir.dY));
         }
@@ -132,11 +133,6 @@ public class TenetAgent extends ArtificialAgent {
      * @param boxes List of box locations
      * @return number of boxes - number of boxes on a target
      */
-//    private double estimate(HashSet<Pair> boxes) {
-//        double r = board.boxCount;
-//        for (Pair box : boxes) if (tenetTargets.contains(box)) r -= 1;
-//        return r;
-//    }
     private int estimate(HashSet<Pair> boxes) {
         int count = 0;
         for(Pair box : boxes) {
